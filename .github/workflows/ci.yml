@@ -55,10 +55,10 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build \\
-            --label org.opencontainers.image.revision=${{ github.sha }} \\
-            --label org.opencontainers.image.source=${{ github.repository }} \\
-            -t prod-cicd-demo:${IMAGE_TAG} \\
+          docker build 
+            --label org.opencontainers.image.revision=${{ github.sha }} 
+            --label org.opencontainers.image.source=${{ github.repository }} 
+            -t prod-cicd-demo:${IMAGE_TAG} 
             -t prod-cicd-demo:${SHORT_SHA} .
 
       - name: Smoke test container
@@ -89,9 +89,9 @@ jobs:
       - name: Login to ECR
         if: github.event_name == 'push'
         run: |
-          aws ecr get-login-password --region ${{ vars.AWS_REGION }} \\
-          | docker login \\
-            --username AWS \\
+          aws ecr get-login-password --region ${{ vars.AWS_REGION }} 
+          | docker login 
+            --username AWS 
             --password-stdin ${{ vars.ECR_URL }}
 
       - name: Tag image for ECR
@@ -109,11 +109,11 @@ jobs:
       - name: Get pushed image digest
         if: github.event_name == 'push'
         run: |
-          IMAGE_DIGEST=$(aws ecr describe-images \\
-            --repository-name prod-cicd-demo \\
-            --image-ids imageTag=${IMAGE_TAG} \\
-            --region ${{ vars.AWS_REGION }} \\
-            --query 'imageDetails[0].imageDigest' \\
+          IMAGE_DIGEST=$(aws ecr describe-images 
+            --repository-name prod-cicd-demo 
+            --image-ids imageTag=${IMAGE_TAG} 
+            --region ${{ vars.AWS_REGION }} 
+            --query 'imageDetails[0].imageDigest' 
             --output text)
 
           echo "IMAGE_DIGEST=$IMAGE_DIGEST" >> $GITHUB_ENV
