@@ -1,0 +1,148 @@
+name: Production CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  validate-build-push-promote:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout app repo
+        uses: actions/checkout@v4
+
+      - name: Set short SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest bandit
+
+      - name: Run unit tests
+        run: pytest tests/ -v
+
+      - name: Run Python security scan
+        run: bandit -r . -x tests
+
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Dockerfile lint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+
+      - name: Build Docker image
+        run: |
+          docker build \\
+            --label org.opencontainers.image.revision=${{ github.sha }} \\
+            --label org.opencontainers.image.source=${{ github.repository }} \\
+            -t prod-cicd-demo:${IMAGE_TAG} \\
+            -t prod-cicd-demo:${SHORT_SHA} .
+
+      - name: Smoke test container
+        run: |
+          docker run -d --name smoke-test -p 5000:5000 prod-cicd-demo:${IMAGE_TAG}
+          sleep 8
+          curl -f <http://localhost:5000/health>
+          curl -f <http://localhost:5000/ready>
+          docker logs smoke-test
+          docker rm -f smoke-test
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: prod-cicd-demo:${{ github.sha }}
+          format: table
+          exit-code: "0"
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
+
+      - name: Configure AWS credentials through OIDC
+        if: github.event_name == 'push'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to ECR
+        if: github.event_name == 'push'
+        run: |
+          aws ecr get-login-password --region ${{ vars.AWS_REGION }} \\
+          | docker login \\
+            --username AWS \\
+            --password-stdin ${{ vars.ECR_URL }}
+
+      - name: Tag image for ECR
+        if: github.event_name == 'push'
+        run: |
+          docker tag prod-cicd-demo:${IMAGE_TAG} ${{ vars.ECR_URL }}:${IMAGE_TAG}
+          docker tag prod-cicd-demo:${IMAGE_TAG} ${{ vars.ECR_URL }}:${SHORT_SHA}
+
+      - name: Push image to ECR
+        if: github.event_name == 'push'
+        run: |
+          docker push ${{ vars.ECR_URL }}:${IMAGE_TAG}
+          docker push ${{ vars.ECR_URL }}:${SHORT_SHA}
+
+      - name: Get pushed image digest
+        if: github.event_name == 'push'
+        run: |
+          IMAGE_DIGEST=$(aws ecr describe-images \\
+            --repository-name prod-cicd-demo \\
+            --image-ids imageTag=${IMAGE_TAG} \\
+            --region ${{ vars.AWS_REGION }} \\
+            --query 'imageDetails[0].imageDigest' \\
+            --output text)
+
+          echo "IMAGE_DIGEST=$IMAGE_DIGEST" >> $GITHUB_ENV
+          echo "Image digest: $IMAGE_DIGEST"
+
+      - name: Checkout GitOps repo
+        if: github.event_name == 'push'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.CONFIG_REPO }}
+          token: ${{ secrets.CONFIG_REPO_TOKEN }}
+          path: config-repo
+
+      - name: Update GitOps manifest
+        if: github.event_name == 'push'
+        run: |
+          cd config-repo/apps/prod-cicd-demo/base
+
+          sed -i "s|image: .*|image: ${{ vars.ECR_URL }}:${IMAGE_TAG}|g" deployment.yaml
+          sed -i "s|value: .*|value: \\"${SHORT_SHA}\\"|g" deployment.yaml
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@example.com"
+
+          if git diff --quiet; then
+            echo "No GitOps change detected."
+            exit 0
+          fi
+
+          git add deployment.yaml
+          git commit -m "Deploy prod-cicd-demo ${SHORT_SHA}"
+          git push
