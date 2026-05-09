@@ -132,8 +132,12 @@ jobs:
         run: |
           cd config-repo/apps/prod-cicd-demo/base
 
+          ls -lrt
+
           sed -i "s|image: .*|image: ${{ vars.ECR_URL }}:${IMAGE_TAG}|g" deployment.yaml
           sed -i "s|value: .*|value: \"${SHORT_SHA}\"|g" deployment.yaml
+
+          cat deployment.yaml
 
           git config user.name "github-actions"
           git config user.email "github-actions@example.com"
