@@ -13,7 +13,7 @@ START_TIME = time.time()
 @app.route("/")
 def home():
     return {
-        "application": "prod-cicd-demo",
+        "application": "prod-cicd-demo-v2",
         "version": VERSION,
         "environment": ENVIRONMENT,
         "hostname": HOSTNAME
