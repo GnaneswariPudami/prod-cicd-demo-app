@@ -33,4 +33,5 @@ def ready():
     }
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    host_ip = os.getenv("APP_HOST", "127.0.0.1")
+    app.run(host=host_ip, port=5000)
