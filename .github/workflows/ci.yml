@@ -139,8 +139,8 @@ jobs:
 
           cat deployment.yaml
 
-          git config user.name "github-actions"
-          git config user.email "github-actions@example.com"
+          git config user.name "GnaneswariPudami"
+          git config user.email "gnaneswari.pudami@gmail.com"
 
           if git diff --quiet; then
             echo "No GitOps change detected."
