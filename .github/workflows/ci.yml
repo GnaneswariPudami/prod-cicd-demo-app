@@ -63,7 +63,6 @@ jobs:
 
       - name: Smoke test container
         run: |
-          docker images prod-*
           docker run -d --name smoke-test -p 5000:5000 prod-cicd-demo:${IMAGE_TAG}
           sleep 8
           curl -f http://localhost:5000/health
