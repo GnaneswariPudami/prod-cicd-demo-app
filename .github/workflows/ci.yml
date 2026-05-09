@@ -135,8 +135,8 @@ jobs:
           sed -i "s|image: .*|image: ${{ vars.ECR_URL }}:${IMAGE_TAG}|g" deployment.yaml
           sed -i "s|value: .*|value: \"${SHORT_SHA}\"|g" deployment.yaml
 
-          git config user.name "GnaneswariPudami"
-          git config user.email "gnaneswari.pudami@gmail.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
           if git diff --quiet; then
             echo "No GitOps change detected."
