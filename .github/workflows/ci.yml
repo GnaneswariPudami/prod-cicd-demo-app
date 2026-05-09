@@ -126,6 +126,7 @@ jobs:
           repository: ${{ vars.CONFIG_REPO }}
           token: ${{ secrets.CONFIG_REPO_TOKEN }}
           path: config-repo
+          persist-credentials: true
 
       - name: Update GitOps manifest
         if: github.event_name == 'push'
@@ -145,4 +146,4 @@ jobs:
 
           git add deployment.yaml
           git commit -m "Deploy prod-cicd-demo ${SHORT_SHA}"
-          git push
+          git push origin HEAD:main
